@@ -19,8 +19,8 @@ from core.exceptions import (
     general_exception_handler
 )
 
-# 导入路由（后续创建）
-# from api import meetings
+# 导入路由
+from api import meetings
 
 # 确保上传目录存在（在应用创建前）
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
@@ -32,12 +32,15 @@ async def lifespan(app: FastAPI):
     # 启动时执行
     print("🚀 应用启动中...")
 
-    # TODO: 启动 APScheduler 调度器
+    # 启动 APScheduler 调度器
+    from core.scheduler import start_scheduler, shutdown_scheduler
+    start_scheduler()
 
     yield
 
     # 关闭时执行
     print("👋 应用关闭中...")
+    shutdown_scheduler()
     await engine.dispose()
 
 
@@ -69,7 +72,7 @@ app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 
 # 注册路由
-# app.include_router(meetings.router, prefix=settings.API_PREFIX)
+app.include_router(meetings.router, prefix=settings.API_PREFIX)
 
 
 @app.get("/")
