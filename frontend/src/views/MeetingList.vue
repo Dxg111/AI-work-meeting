@@ -209,7 +209,7 @@ import { uploadMeeting } from '@/api/meeting'
 import { getDeptOptions, getUserOptions } from '@/api/org'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, Search } from '@element-plus/icons-vue'
-import { createPoller, isProcessingStatus } from '@/utils/poll'
+import { createPoller, isProcessingStatus, isWaitingForAutoProcess } from '@/utils/poll'
 import { formatDateTime } from '@/utils/datetime'
 
 const router = useRouter()
@@ -458,10 +458,13 @@ const startPolling = () => {
       return meetingStore.meetingList
     },
     (meetings) => {
-      // 检查是否有处理中的会议
-      return meetings.some(m => isProcessingStatus(m.status))
+      // 检查是否有处理中/等待自动处理启动的会议
+      return meetings.some(
+        m => isProcessingStatus(m.status) || isWaitingForAutoProcess(m)
+      )
     },
-    5000 // 5秒轮询
+    5000, // 5秒轮询
+    120 // 最多轮询 10 分钟
   )
 
   poller.start()
@@ -484,7 +487,9 @@ onMounted(async () => {
   await meetingStore.fetchMeetingList()
 
   // 检查是否有处理中的会议，如果有则启动轮询
-  const hasProcessing = meetingStore.meetingList.some(m => isProcessingStatus(m.status))
+  const hasProcessing = meetingStore.meetingList.some(
+    m => isProcessingStatus(m.status) || isWaitingForAutoProcess(m)
+  )
   if (hasProcessing) {
     startPolling()
   }

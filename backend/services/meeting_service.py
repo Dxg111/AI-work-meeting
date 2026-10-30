@@ -101,6 +101,12 @@ class MeetingService:
         if not meeting:
             raise BusinessException("会议不存在")
 
+        # 已在处理中的会议：重复触发按幂等成功处理。
+        # 前端在上传后可能因轮询时序仍显示旧状态，用户再次点击时不应报错。
+        if meeting.status in ("transcribing", "summarizing"):
+            print(f"[Pipeline] 会议 {meeting_id} 正在处理中（{meeting.status}），忽略重复触发")
+            return
+
         # 检查状态（只有 uploaded / failed / transcribed 可以触发）
         if meeting.status not in ["uploaded", "failed", "transcribed"]:
             raise BusinessException(f"会议状态为 {meeting.status}，无法触发处理")
@@ -124,9 +130,12 @@ class MeetingService:
             print(f"[Pipeline] 会议 {meeting_id} 已有转写结果，直接生成纪要")
             return
 
+        # COS 私有桶需要重新生成预签名 URL；本地存储直接使用上传时的 file_url
+        audio_url = storage_service.get_accessible_url(meeting.file_path, meeting.file_url)
+
         # 需要先转写：仅在真实 ASR 模式下校验公网地址（Mock 不需要下载音频）
         if settings.ASR_PROVIDER != "mock":
-            is_valid, msg = storage_service.check_public_url_accessibility()
+            is_valid, msg = storage_service.check_public_url_accessibility(audio_url)
             if not is_valid:
                 meeting.status = "failed"
                 meeting.error_msg = msg
@@ -135,7 +144,7 @@ class MeetingService:
 
         # 提交 ASR 任务
         try:
-            await asr_service.submit_transcribe_task(meeting_id, meeting.file_url, db)
+            await asr_service.submit_transcribe_task(meeting_id, audio_url, db)
             print(f"[Pipeline] 会议 {meeting_id} 流水线已启动")
         except Exception as e:
             raise BusinessException(f"启动流水线失败: {str(e)}")
@@ -204,8 +213,8 @@ class MeetingService:
         if not meeting:
             raise BusinessException("会议不存在")
 
-        # 删除本地文件
-        storage_service.delete_file(meeting.file_path)
+        # 删除本地文件或 COS 对象
+        await storage_service.delete_file(meeting.file_path)
 
         # 删除数据库记录（级联删除由外键约束处理）
         await db.delete(meeting)

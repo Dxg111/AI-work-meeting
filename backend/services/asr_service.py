@@ -18,6 +18,8 @@ class ASRService:
 
     def __init__(self):
         self.provider = get_asr_provider()
+        # 进程内去重：上传后的后台任务与手动触发可能同时提交
+        self._submitting_meetings = set()
 
     async def submit_transcribe_task(self, meeting_id: int, audio_url: str, db: AsyncSession) -> str:
         """
@@ -34,6 +36,11 @@ class ASRService:
         Raises:
             BusinessException: 提交失败
         """
+        if meeting_id in self._submitting_meetings:
+            print(f"[ASR] 会议 {meeting_id} 正在提交中，忽略重复请求")
+            return ""
+
+        self._submitting_meetings.add(meeting_id)
         try:
             # 调用 Provider 提交任务
             task_id = await self.provider.submit_task(audio_url)
@@ -61,6 +68,8 @@ class ASRService:
             error_msg = f"提交 ASR 任务失败: {str(e)}"
             print(f"[ASR] {error_msg}")
             raise BusinessException(error_msg)
+        finally:
+            self._submitting_meetings.discard(meeting_id)
 
     async def poll_transcribe_result(self, meeting_id: int, task_id: str, db: AsyncSession) -> Optional[ASRResult]:
         """

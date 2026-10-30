@@ -304,7 +304,7 @@ import { useMeetingStore } from '@/store/meeting'
 import { triggerProcess } from '@/api/meeting'
 import { ElLoading, ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import { createPoller, isProcessingStatus } from '@/utils/poll'
+import { createPoller, isProcessingStatus, isWaitingForAutoProcess } from '@/utils/poll'
 import { formatTimestamp } from '@/utils/download'
 import { formatDateTime } from '@/utils/datetime'
 
@@ -322,7 +322,11 @@ const pdfTemplate = ref(null)
 let poller = null
 
 const isProcessing = computed(() => {
-  return meetingStore.currentMeeting && isProcessingStatus(meetingStore.currentMeeting.status)
+  const meeting = meetingStore.currentMeeting
+  return !!meeting && (
+    isProcessingStatus(meeting.status) ||
+    isWaitingForAutoProcess(meeting)
+  )
 })
 
 const canEdit = computed(() => !!meetingStore.currentMeeting?.can_edit)
@@ -602,9 +606,10 @@ const startPolling = () => {
       return meetingStore.currentMeeting
     },
     (meeting) => {
-      return isProcessingStatus(meeting.status)
+      return isProcessingStatus(meeting.status) || isWaitingForAutoProcess(meeting)
     },
-    5000
+    5000,
+    120 // 最多轮询 10 分钟，避免异常情况下无限刷新
   )
 
   poller.start()

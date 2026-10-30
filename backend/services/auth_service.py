@@ -90,7 +90,7 @@ class AuthService:
         await db.refresh(user)
 
         # 清理旧头像文件
-        storage_service.delete_avatar(old_url)
+        await storage_service.delete_avatar(old_url)
 
         return user
 

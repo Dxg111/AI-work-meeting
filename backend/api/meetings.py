@@ -120,9 +120,19 @@ async def _trigger_pipeline_background(meeting_id: int):
 
     async with async_session_maker() as db:
         try:
+            result = await db.execute(
+                select(Meeting).where(Meeting.meeting_id == meeting_id)
+            )
+            meeting = result.scalar_one_or_none()
+            if not meeting:
+                return
+
+            # COS 私有桶每次重新生成预签名 URL
+            audio_url = storage_service.get_accessible_url(meeting.file_path, meeting.file_url)
+
             # 检查公网URL（仅真实 ASR 需要；Mock 模式不下载音频）
             if settings.ASR_PROVIDER != "mock":
-                is_valid, msg = storage_service.check_public_url_accessibility()
+                is_valid, msg = storage_service.check_public_url_accessibility(audio_url)
                 if not is_valid:
                     await meeting_service.mark_failed(meeting_id, msg, db)
                     return
@@ -130,13 +140,7 @@ async def _trigger_pipeline_background(meeting_id: int):
             # 提交 ASR 任务
             from services.asr_service import asr_service
 
-            result = await db.execute(
-                select(Meeting).where(Meeting.meeting_id == meeting_id)
-            )
-            meeting = result.scalar_one_or_none()
-
-            if meeting:
-                await asr_service.submit_transcribe_task(meeting_id, meeting.file_url, db)
+            await asr_service.submit_transcribe_task(meeting_id, audio_url, db)
 
         except Exception as e:
             print(f"[Background] 触发流水线失败: {e}")

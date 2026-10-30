@@ -13,7 +13,7 @@
 - ASR Provider：Mock + 真实 Fun-ASR（阿里云百炼异步录音文件识别）
 - LLM Provider：Mock + 真实通义千问（LangChain 四步链式调用）
 - APScheduler 轮询 ASR 任务，转写完成后自动继续生成纪要
-- 文件存储、公网 URL 生成、回环地址检测
+- 文件存储：本地磁盘 / 腾讯云 COS 可切换（`STORAGE_PROVIDER`），含公网 URL、预签名 URL、回环地址检测
 
 ### 前端
 - 会议列表（上传、搜索、状态筛选、分页、5 秒轮询）

@@ -12,6 +12,7 @@ from core.database import async_session_maker
 from models.meeting import Meeting
 from services.asr_service import asr_service
 from services.llm_service import llm_service
+from services.storage_service import storage_service
 
 
 # 创建调度器实例
@@ -131,6 +132,43 @@ async def recover_stuck_pipelines():
                     await llm_service.generate_minutes(meeting.meeting_id, db)
                 except Exception as e:
                     print(f"[Recovery] 会议 {meeting.meeting_id} 补跑失败: {e}")
+
+            # 3. uploaded + auto_process=1，但 ASR 一直没启动（例如进程重启丢失后台任务）
+            result = await db.execute(
+                select(Meeting).where(
+                    Meeting.status == "uploaded",
+                    Meeting.auto_process.is_(True),
+                )
+            )
+            for meeting in result.scalars().all():
+                if not meeting.updated_at:
+                    continue
+
+                age = (now - meeting.updated_at).total_seconds()
+                if age < settings.UPLOADED_STUCK_TIMEOUT_SECONDS:
+                    continue
+
+                print(
+                    f"[Recovery] 会议 {meeting.meeting_id} 已上传但 ASR 未启动，补提交"
+                )
+                try:
+                    audio_url = storage_service.get_accessible_url(
+                        meeting.file_path, meeting.file_url
+                    )
+                    if settings.ASR_PROVIDER != "mock":
+                        is_valid, msg = storage_service.check_public_url_accessibility(audio_url)
+                        if not is_valid:
+                            await asr_service.mark_failed(meeting.meeting_id, msg, db)
+                            continue
+
+                    await asr_service.submit_transcribe_task(
+                        meeting.meeting_id, audio_url, db
+                    )
+                except Exception as e:
+                    print(f"[Recovery] 会议 {meeting.meeting_id} 补提交 ASR 失败: {e}")
+                    await asr_service.mark_failed(
+                        meeting.meeting_id, f"自动处理启动失败: {e}", db
+                    )
 
         except Exception as e:
             print(f"[Recovery] 恢复任务失败: {e}")

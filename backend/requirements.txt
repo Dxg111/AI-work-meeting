@@ -30,3 +30,6 @@ apscheduler==3.10.4
 
 # HTTP 请求
 httpx==0.25.2
+
+# 腾讯云 COS 对象存储
+cos-python-sdk-v5==1.9.44

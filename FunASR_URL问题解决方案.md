@@ -8,7 +8,8 @@
 > - 成功后下载 `output.results[].transcription_url` 解析句子
 >
 > 已用阿里云公开示例音频验证真实转写成功。
-> 当前唯一遗留问题是**上传本地音频时的公网可访问性**：ngrok 免费地址会被阿里云侧拒绝，仍需改用 OSS 或 frp + 固定域名。
+> 存储层已新增**腾讯云 COS** 后端：配置 `STORAGE_PROVIDER=cos` 即可让上传的音频获得公网/预签名 URL，详见《COS存储接入说明.md》。
+> ngrok 免费地址仍不可用；可改用 **腾讯云 COS、阿里云 OSS 或 frp + 固定域名**。
 
 ## 问题描述
 
@@ -28,6 +29,30 @@ InvalidParameter: url error, please check url！
 **根本原因**：ngrok 免费版对某些云服务商的访问有限制，或者阿里云 FunASR 对 ngrok 域名有黑名单策略。
 
 ## 解决方案
+
+### 方案 0：腾讯云 COS（已实现，推荐用于替代 ngrok）
+
+代码已支持腾讯云对象存储，配置即可启用：
+
+```env
+STORAGE_PROVIDER=cos
+
+COS_SECRET_ID=你的SecretId
+COS_SECRET_KEY=你的SecretKey
+COS_REGION=ap-guangzhou
+COS_BUCKET=your-bucket-1250000000
+COS_PREFIX=meetings
+COS_ACL=public-read          # 或 private（私有桶 + 预签名）
+COS_PRESIGNED_EXPIRES=7200
+
+ASR_PROVIDER=funasr
+```
+
+- 公有读：上传后返回 COS 公网 URL；
+- 私有桶：每次提交 ASR 前重新生成预签名 URL；
+- 本地存储仍可通过 `STORAGE_PROVIDER=local` 回退。
+
+完整步骤、权限配置和常见问题见《COS存储接入说明.md》。
 
 ### 方案 1：使用 Mock ASR 模式（临时测试）✅ 已配置
 
@@ -186,8 +211,8 @@ ASR_PROVIDER=mock
 ## 建议
 
 1. **开发阶段**：使用 `mock` 模式快速迭代
-2. **测试阶段**：使用 frp + 自己的服务器
-3. **生产环境**：使用阿里云 OSS（最佳方案）
+2. **测试阶段**：使用腾讯云 COS（公有读或私有桶预签名）或 frp + 自己的服务器
+3. **生产环境**：腾讯云 COS 私有桶 + 预签名，或阿里云 OSS（与 Fun-ASR 同云、链路更短）
 
 ## 重启后端服务
 

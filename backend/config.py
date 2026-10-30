@@ -31,6 +31,20 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE: int = 500 * 1024 * 1024  # 500MB
     ALLOWED_EXTENSIONS: list = [".mp3", ".wav", ".m4a", ".mp4", ".avi", ".mov"]
 
+    # 文件存储：local | cos
+    STORAGE_PROVIDER: str = "local"
+
+    # 腾讯云 COS（STORAGE_PROVIDER=cos 时必填）
+    COS_SECRET_ID: str = ""
+    COS_SECRET_KEY: str = ""
+    COS_REGION: str = ""
+    COS_BUCKET: str = ""  # 含 APPID，例如 meeting-1250000000
+    COS_PREFIX: str = "meetings"
+    COS_ACL: str = "public-read"  # public-read | private
+    COS_SET_OBJECT_ACL: bool = True  # 大规模场景可关闭，改用桶策略
+    COS_PUBLIC_BASE_URL: str = ""  # 可选自定义域名/CDN
+    COS_PRESIGNED_EXPIRES: int = 7200  # 私有桶预签名有效期（秒）
+
     # 头像上传配置
     MAX_AVATAR_SIZE: int = 2 * 1024 * 1024  # 2MB
     ALLOWED_AVATAR_EXTENSIONS: list = [".jpg", ".jpeg", ".png", ".gif", ".webp"]
@@ -62,6 +76,7 @@ class Settings(BaseSettings):
     PIPELINE_RECOVERY_INTERVAL: int = 60  # 卡住流水线恢复扫描间隔（秒）
     LLM_STUCK_TIMEOUT_SECONDS: int = 30 * 60  # summarizing 卡住判定（30分钟）
     TRANSCRIBED_STUCK_TIMEOUT_SECONDS: int = 2 * 60  # transcribed 未继续 LLM 判定（2分钟）
+    UPLOADED_STUCK_TIMEOUT_SECONDS: int = 2 * 60  # uploaded+auto_process 未启动 ASR 判定（2分钟）
 
     # 应用配置
     DEBUG: bool = True

@@ -88,3 +88,14 @@ export function createPoller(fetchFn, checkFn, interval = 5000, maxRetries = 0) 
 export function isProcessingStatus(status) {
   return ['transcribing', 'summarizing'].includes(status)
 }
+
+/**
+ * 是否为“已上传、等待自动处理启动”的会议
+ *
+ * 上传接口先返回，后台任务再提交 ASR，存在短暂时间窗；
+ * 详情页/列表页应把这个状态也视为处理中并继续轮询。
+ */
+export function isWaitingForAutoProcess(meeting) {
+  if (!meeting) return false
+  return meeting.status === 'uploaded' && Number(meeting.auto_process) === 1
+}
