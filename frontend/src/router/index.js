@@ -11,6 +11,12 @@ const routes = [
     meta: { title: '登录', public: true }
   },
   {
+    path: '/stats',
+    name: 'StatsDashboard',
+    component: () => import('@/views/StatsDashboard.vue'),
+    meta: { title: '统计首页' }
+  },
+  {
     path: '/',
     name: 'MeetingList',
     component: () => import('@/views/MeetingList.vue'),
@@ -56,9 +62,9 @@ router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
 
   if (to.meta.public) {
-    // 已登录用户访问登录页时直接进入首页
+    // 已登录用户访问登录页时直接进入统计首页
     if (token && to.name === 'Login') {
-      return next('/')
+      return next('/stats')
     }
     return next()
   }
@@ -76,7 +82,7 @@ router.beforeEach((to, from, next) => {
       user = null
     }
     if (!user || user.role !== 'super_admin') {
-      return next('/')
+      return next('/stats')
     }
   }
 

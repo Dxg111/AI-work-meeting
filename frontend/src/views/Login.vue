@@ -97,7 +97,7 @@ const handleLogin = async () => {
     const redirect =
       typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
         ? route.query.redirect
-        : '/'
+        : '/stats'
     await router.replace(redirect)
   } catch (error) {
     // 错误提示由 Axios 响应拦截器统一处理

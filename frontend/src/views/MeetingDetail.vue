@@ -63,6 +63,14 @@
         >
           下载纪要
         </el-button>
+        <el-button
+          v-if="meetingStore.minutes"
+          type="warning"
+          :loading="exportingPdf"
+          @click="handleExportPdf"
+        >
+          导出 PDF
+        </el-button>
         <el-button type="info" @click="handleRefresh">
           刷新
         </el-button>
@@ -231,6 +239,61 @@
         <el-button type="primary" @click="handleRenameSpeakers">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- PDF 导出模板（屏幕外渲染，不显示给用户） -->
+    <div ref="pdfTemplate" class="pdf-template">
+      <h1>{{ meetingStore.currentMeeting?.title || '会议纪要' }}</h1>
+      <p class="pdf-meta">
+        创建人：{{ meetingStore.currentMeeting?.creator_name || '-' }}
+        ｜ 部门：{{ meetingStore.currentMeeting?.dept_name || '未分配' }}
+        ｜ 时间：{{ formatDateTime(meetingStore.currentMeeting?.created_at) }}
+      </p>
+
+      <template v-if="meetingStore.minutes">
+        <h2>会议摘要</h2>
+        <p>{{ meetingStore.minutes.summary || '（无摘要）' }}</p>
+
+        <h2>关键词</h2>
+        <p>{{ (meetingStore.minutes.keywords || []).join('、') || '（无关键词）' }}</p>
+
+        <h2>待办事项</h2>
+        <table v-if="meetingStore.minutes.todos && meetingStore.minutes.todos.length">
+          <thead>
+            <tr>
+              <th>事项</th>
+              <th>负责人</th>
+              <th>截止时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(todo, index) in meetingStore.minutes.todos"
+              :key="index"
+            >
+              <td>{{ todo.content }}</td>
+              <td>{{ todo.owner || '-' }}</td>
+              <td>{{ todo.deadline || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else>（无待办事项）</p>
+
+        <h2>发言人总结</h2>
+        <div
+          v-if="meetingStore.minutes.speaker_summary && Object.keys(meetingStore.minutes.speaker_summary).length > 0"
+        >
+          <p
+            v-for="(summary, speakerId) in meetingStore.minutes.speaker_summary"
+            :key="speakerId"
+          >
+            <strong>{{ getSpeakerName(speakerId) }}：</strong>{{ summary }}
+          </p>
+        </div>
+        <p v-else>（无发言人总结）</p>
+      </template>
+
+      <p class="pdf-footer">由智能会议纪要助手生成</p>
+    </div>
   </div>
 </template>
 
@@ -252,6 +315,8 @@ const meetingId = ref(parseInt(route.params.id))
 const showSpeakerDialog = ref(false)
 const speakerRenames = ref([])
 const shareDept = ref(false)
+const exportingPdf = ref(false)
+const pdfTemplate = ref(null)
 
 let poller = null
 
@@ -328,6 +393,46 @@ const handleDownloadMarkdown = async () => {
     ElMessage.success('下载成功')
   } catch (error) {
     ElMessage.error('下载失败: ' + error.message)
+  }
+}
+
+const formatDateTime = (value) => {
+  if (!value) return '-'
+  return String(value).replace('T', ' ').slice(0, 19)
+}
+
+const safeFilename = (title) => {
+  return (title || '会议纪要').replace(/[\\/:*?"<>|]/g, '_')
+}
+
+const handleExportPdf = async () => {
+  if (!pdfTemplate.value) {
+    ElMessage.warning('暂无可导出的纪要内容')
+    return
+  }
+
+  exportingPdf.value = true
+  try {
+    // 按需加载，避免详情页首屏加载 PDF 库
+    const { default: html2pdf } = await import('html2pdf.js')
+
+    await html2pdf()
+      .set({
+        margin: [10, 10, 12, 10],
+        filename: `${safeFilename(meetingStore.currentMeeting?.title)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] }
+      })
+      .from(pdfTemplate.value)
+      .save()
+
+    ElMessage.success('PDF 导出成功')
+  } catch (error) {
+    ElMessage.error('PDF 导出失败')
+  } finally {
+    exportingPdf.value = false
   }
 }
 
@@ -503,5 +608,74 @@ onUnmounted(() => {
   flex: 1;
   line-height: 1.8;
   color: #303133;
+}
+</style>
+
+<style>
+/* PDF 导出模板：屏幕外渲染，供 html2pdf 截图 */
+.pdf-template {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 794px;
+  padding: 40px 48px;
+  background: #ffffff;
+  color: #0b0b0b;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  font-size: 14px;
+  line-height: 1.8;
+  box-sizing: border-box;
+}
+
+.pdf-template h1 {
+  margin: 0 0 8px;
+  font-size: 26px;
+  line-height: 1.4;
+}
+
+.pdf-template .pdf-meta {
+  margin: 0 0 28px;
+  color: #52514e;
+  font-size: 12px;
+}
+
+.pdf-template h2 {
+  margin: 24px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e1e0d9;
+  font-size: 17px;
+  page-break-after: avoid;
+}
+
+.pdf-template p {
+  margin: 0 0 8px;
+}
+
+.pdf-template table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.pdf-template th,
+.pdf-template td {
+  border: 1px solid #d9d9d9;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.pdf-template th {
+  background: #f5f7fa;
+  font-weight: 600;
+}
+
+.pdf-template .pdf-footer {
+  margin-top: 36px;
+  padding-top: 12px;
+  border-top: 1px solid #e1e0d9;
+  color: #898781;
+  font-size: 11px;
+  text-align: center;
 }
 </style>

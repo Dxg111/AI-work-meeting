@@ -147,6 +147,11 @@ class ASRService:
             meeting.status = "transcribed"
             meeting.error_msg = None
 
+            # 根据最后一句的结束时间补充音频时长（秒），用于统计
+            if result.sentences:
+                max_end_ms = max(int(s.get("end") or 0) for s in result.sentences)
+                meeting.duration = max(1, round(max_end_ms / 1000))
+
             await db.commit()
 
             print(f"[ASR] 会议 {meeting_id} 转写结果保存成功，共 {len(result.sentences)} 句话，{len(speaker_ids)} 位发言人")

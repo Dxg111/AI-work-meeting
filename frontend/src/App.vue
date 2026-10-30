@@ -8,6 +8,13 @@
 
             <nav class="nav">
               <router-link
+                to="/stats"
+                class="nav-link"
+                :class="{ active: route.path === '/stats' }"
+              >
+                统计首页
+              </router-link>
+              <router-link
                 to="/"
                 class="nav-link"
                 :class="{ active: isMeetingPage }"
