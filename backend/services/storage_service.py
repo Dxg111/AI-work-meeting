@@ -1,10 +1,12 @@
 """
 文件存储服务
 """
+import ipaddress
 import os
 import uuid
 from pathlib import Path
 from datetime import datetime
+from urllib.parse import urlparse
 from fastapi import UploadFile
 from config import settings
 from core.exceptions import BusinessException
@@ -43,19 +45,31 @@ class StorageService:
         # 3. 保存文件到本地
         file_path = self.upload_dir / unique_name
 
+        total_size = 0
         try:
-            content = await file.read()
-
-            # 校验文件大小
-            if len(content) > settings.MAX_UPLOAD_SIZE:
-                raise BusinessException(
-                    f"文件大小超过限制 {settings.MAX_UPLOAD_SIZE / 1024 / 1024:.0f}MB"
-                )
-
+            # 分块写入，避免把 500MB 文件一次性读入内存
             with open(file_path, "wb") as f:
-                f.write(content)
+                while True:
+                    chunk = await file.read(1024 * 1024)
+                    if not chunk:
+                        break
+
+                    total_size += len(chunk)
+                    if total_size > settings.MAX_UPLOAD_SIZE:
+                        raise BusinessException(
+                            f"文件大小超过限制 {settings.MAX_UPLOAD_SIZE / 1024 / 1024:.0f}MB"
+                        )
+
+                    f.write(chunk)
 
         except Exception as e:
+            # 失败时清理已写入的半截文件
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except OSError:
+                    pass
+
             if isinstance(e, BusinessException):
                 raise
             raise BusinessException(f"文件保存失败: {str(e)}")
@@ -67,19 +81,43 @@ class StorageService:
 
     def check_public_url_accessibility(self) -> tuple[bool, str]:
         """
-        检查公网URL是否合法（不能是本地回环地址）
+        检查公网 URL 是否合法
+
+        真实 Fun-ASR 必须能从公网下载音频，因此以下地址会被拒绝：
+        - localhost
+        - 回环地址、私网地址、链路本地地址、保留地址、未指定地址
+        - 非 http(s) 地址
+
+        域名只做格式校验，是否能被云端访问需部署侧保证。
 
         Returns:
             (is_valid, message): 是否合法和提示信息
         """
-        url_lower = self.public_base_url.lower()
+        raw = (self.public_base_url or "").strip()
+        parsed = urlparse(raw)
 
-        # 检测本地回环地址
-        localhost_patterns = ["127.0.0.1", "0.0.0.0", "::1"]
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return False, "PUBLIC_BASE_URL 配置不正确，必须是 http(s) 公网地址"
 
-        for pattern in localhost_patterns:
-            if pattern in url_lower:
-                return False, f"公网地址配置为本地回环地址 ({pattern})，云端 Fun-ASR 无法下载音频，请配置 ngrok/frp 等公网地址"
+        host = parsed.hostname.lower()
+
+        if host == "localhost":
+            return False, (
+                "公网地址配置为 localhost，云端 Fun-ASR 无法下载音频，"
+                "请配置 OSS、frp 或固定公网域名"
+            )
+
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            # 域名，放行
+            return True, "OK"
+
+        if not ip.is_global:
+            return False, (
+                f"公网地址配置为内网/回环地址 ({host})，"
+                "云端 Fun-ASR 无法下载音频，请配置 OSS、frp 或固定公网域名"
+            )
 
         return True, "OK"
 

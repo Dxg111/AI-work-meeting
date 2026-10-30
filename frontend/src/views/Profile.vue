@@ -1,5 +1,14 @@
 <template>
   <div class="profile-page">
+    <el-alert
+      v-if="mustChangePassword"
+      title="首次登录，请先修改初始密码后再使用系统"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="force-alert"
+    />
+
     <el-card class="profile-card" v-loading="loading">
       <div class="profile-header">
         <el-upload
@@ -32,7 +41,7 @@
 
     <el-card class="tabs-card">
       <el-tabs v-model="activeTab">
-        <el-tab-pane label="基本资料" name="profile">
+        <el-tab-pane label="基本资料" name="profile" :disabled="mustChangePassword">
           <el-form
             ref="profileFormRef"
             :model="profileForm"
@@ -142,6 +151,10 @@ const roleText = computed(() =>
   authStore.isSuperAdmin ? '超级管理员' : '普通用户'
 )
 
+const mustChangePassword = computed(
+  () => !!authStore.user?.must_change_password
+)
+
 const validateEmail = (rule, value, callback) => {
   if (!value) {
     callback()
@@ -240,6 +253,10 @@ const handleChangePassword = async () => {
       passwordForm.old_password,
       passwordForm.new_password
     )
+
+    // 刷新用户信息，清除 must_change_password 标记
+    await authStore.fetchMe()
+
     ElMessage.success('密码修改成功')
     passwordForm.old_password = ''
     passwordForm.new_password = ''
@@ -261,6 +278,10 @@ onMounted(async () => {
   } finally {
     loading.value = false
     fillProfileForm()
+
+    if (authStore.user?.must_change_password) {
+      activeTab.value = 'password'
+    }
   }
 })
 </script>
@@ -269,6 +290,10 @@ onMounted(async () => {
 .profile-page {
   max-width: 960px;
   margin: 0 auto;
+}
+
+.force-alert {
+  margin-bottom: 18px;
 }
 
 .profile-card {

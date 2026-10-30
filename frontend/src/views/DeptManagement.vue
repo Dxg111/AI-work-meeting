@@ -89,6 +89,7 @@ import {
   getDeptList,
   updateDept
 } from '@/api/org'
+import { formatDateTime } from '@/utils/datetime'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -110,11 +111,6 @@ const form = reactive({
 
 const rules = {
   dept_name: [{ required: true, message: '请输入部门名称', trigger: 'blur' }]
-}
-
-const formatDateTime = (value) => {
-  if (!value) return '-'
-  return String(value).replace('T', ' ').slice(0, 19)
 }
 
 const fetchList = async () => {

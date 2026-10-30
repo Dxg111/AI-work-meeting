@@ -25,6 +25,7 @@ class UserOut(BaseModel):
     dept_id: Optional[int] = None
     dept_name: Optional[str] = None
     is_active: bool
+    must_change_password: bool = False
     created_at: datetime
 
     class Config:

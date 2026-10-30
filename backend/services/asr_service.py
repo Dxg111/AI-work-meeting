@@ -163,6 +163,10 @@ class ASRService:
             await self._mark_meeting_failed(meeting_id, error_msg, db)
             raise
 
+    async def mark_failed(self, meeting_id: int, error_msg: str, db: AsyncSession) -> None:
+        """公开的失败标记方法（供调度器超时处理使用）"""
+        await self._mark_meeting_failed(meeting_id, error_msg, db)
+
     async def _mark_meeting_failed(self, meeting_id: int, error_msg: str, db: AsyncSession) -> None:
         """标记会议为失败状态"""
         try:

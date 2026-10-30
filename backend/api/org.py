@@ -114,6 +114,18 @@ async def delete_dept(
 
 # ==================== 用户管理 ====================
 
+@router.get("/users/options", summary="用户下拉选项")
+async def user_options(
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    rows = await org_service.list_user_options(db)
+    return success(data=[
+        {"user_id": user_id, "username": username, "nickname": nickname}
+        for user_id, username, nickname in rows
+    ])
+
+
 @router.get("/users", summary="用户列表")
 async def list_users(
     page: int = Query(1, ge=1),

@@ -53,6 +53,13 @@ export function getUserList(params) {
   })
 }
 
+export function getUserOptions() {
+  return request({
+    url: '/org/users/options',
+    method: 'GET'
+  })
+}
+
 export function createUser(data) {
   return request({
     url: '/org/users',

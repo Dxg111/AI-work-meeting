@@ -99,13 +99,18 @@ const isMeetingPage = computed(
 )
 
 onMounted(async () => {
-  // 已有 token 但本地没有用户信息时，拉取一次当前用户
-  if (authStore.token && !authStore.user) {
+  // 每次进入应用都刷新一次当前用户，确保角色、禁用状态、首次改密标记是最新的
+  if (authStore.token) {
     try {
       await authStore.fetchMe()
     } catch (error) {
       // 401 已由 Axios 拦截器统一处理
     }
+  }
+
+  // 首次登录/重置密码后，强制进入个人中心修改密码
+  if (authStore.user?.must_change_password && route.path !== '/profile') {
+    router.replace('/profile')
   }
 })
 

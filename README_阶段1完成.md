@@ -52,10 +52,18 @@ DASHSCOPE_API_KEY=你的百炼APIKey
 
 ### 3. 启动后端
 
+项目自带虚拟环境 `backend/venv`，依赖版本已与 `requirements.txt` 对齐，建议使用它运行：
+
 ```bash
 cd backend
-pip install -r requirements.txt
-python main.py
+venv/Scripts/python.exe main.py      # Windows
+# source venv/bin/activate && python main.py   # macOS/Linux
+```
+
+如需重新安装依赖：
+
+```bash
+venv/Scripts/pip.exe install -r requirements.txt
 ```
 
 后端：`http://localhost:8000`，Swagger：`http://localhost:8000/docs`
@@ -94,7 +102,7 @@ npm run dev
 
 阶段2 登录鉴权、阶段3 部门管理与数据权限、阶段4 统计首页与 PDF 导出、个人中心均已完成。
 
-- 默认管理员：`admin / Admin@123456`，首次登录后请修改密码。
+- 默认管理员：`admin / Admin@123456`。首次登录会强制进入个人中心修改初始密码；新建用户、管理员重置密码后同样需要先改密。
 - 阶段2：见《阶段2开发完成说明.md》
 - 阶段3：见《阶段3开发完成说明.md》
 - 阶段4：见《阶段4开发完成说明.md》

@@ -51,8 +51,17 @@ class Settings(BaseSettings):
     LLM_TEMPERATURE: float = 0.7
     LLM_MAX_TOKENS: int = 2000
 
+    # 长文本 Map-Reduce
+    LLM_MAP_THRESHOLD_CHARS: int = 8000  # 超过该字符数启用分段处理
+    LLM_MAP_CHUNK_CHARS: int = 6000  # 每段字符数
+    LLM_MAP_MAX_CHUNKS: int = 20  # 最大分段数，防止异常长文本产生过多调用
+
     # 调度器配置
     ASR_POLL_INTERVAL: int = 10  # ASR 轮询间隔（秒）
+    ASR_TASK_TIMEOUT_SECONDS: int = 2 * 60 * 60  # ASR 任务超时（2小时）
+    PIPELINE_RECOVERY_INTERVAL: int = 60  # 卡住流水线恢复扫描间隔（秒）
+    LLM_STUCK_TIMEOUT_SECONDS: int = 30 * 60  # summarizing 卡住判定（30分钟）
+    TRANSCRIBED_STUCK_TIMEOUT_SECONDS: int = 2 * 60  # transcribed 未继续 LLM 判定（2分钟）
 
     # 应用配置
     DEBUG: bool = True

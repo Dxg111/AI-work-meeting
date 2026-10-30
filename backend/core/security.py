@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import bcrypt
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,6 +66,7 @@ def decode_access_token(token: str) -> Optional[dict]:
 
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -95,6 +96,18 @@ async def get_current_user(
 
     if not user.is_active:
         raise ForbiddenException("账号已被禁用，请联系管理员")
+
+    # 首次登录/管理员重置密码后，必须先修改密码才能访问业务接口
+    if user.must_change_password:
+        allowed_suffixes = (
+            "/auth/me",
+            "/auth/profile",
+            "/auth/password",
+            "/auth/avatar",
+            "/auth/logout",
+        )
+        if not request.url.path.endswith(allowed_suffixes):
+            raise ForbiddenException("请先修改初始密码")
 
     return user
 

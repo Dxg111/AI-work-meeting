@@ -197,6 +197,7 @@ import {
   updateUser,
   updateUserStatus
 } from '@/api/org'
+import { formatDateTime } from '@/utils/datetime'
 import { useAuthStore } from '@/store/auth'
 
 const authStore = useAuthStore()
@@ -249,11 +250,6 @@ const passwordRules = {
     { required: true, message: '请输入新密码', trigger: 'blur' },
     { min: 6, max: 128, message: '密码至少 6 位', trigger: 'blur' }
   ]
-}
-
-const formatDateTime = (value) => {
-  if (!value) return '-'
-  return String(value).replace('T', ' ').slice(0, 19)
 }
 
 const isSelf = (row) => row.user_id === authStore.user?.user_id

@@ -19,5 +19,8 @@ class User(Base):
     role = Column(Enum('super_admin', 'normal_user'), nullable=False, default='normal_user', index=True, comment="角色")
     dept_id = Column(Integer, ForeignKey('t_dept.dept_id', ondelete='SET NULL'), index=True, comment="所属部门ID")
     is_active = Column(Boolean, nullable=False, default=True, comment="账号状态")
+    must_change_password = Column(
+        Boolean, nullable=False, default=False, comment="首次登录需修改密码"
+    )
     created_at = Column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now(), comment="更新时间")

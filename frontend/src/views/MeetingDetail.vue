@@ -33,10 +33,10 @@
           {{ meetingStore.currentMeeting.dept_name || '未分配' }}
         </el-descriptions-item>
         <el-descriptions-item label="创建时间">
-          {{ meetingStore.currentMeeting.created_at }}
+          {{ formatDateTime(meetingStore.currentMeeting.created_at) }}
         </el-descriptions-item>
         <el-descriptions-item label="更新时间">
-          {{ meetingStore.currentMeeting.updated_at }}
+          {{ formatDateTime(meetingStore.currentMeeting.updated_at) }}
         </el-descriptions-item>
         <el-descriptions-item
           v-if="meetingStore.currentMeeting.error_msg"
@@ -302,10 +302,11 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMeetingStore } from '@/store/meeting'
 import { triggerProcess } from '@/api/meeting'
-import { ElMessage } from 'element-plus'
+import { ElLoading, ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { createPoller, isProcessingStatus } from '@/utils/poll'
 import { formatTimestamp } from '@/utils/download'
+import { formatDateTime } from '@/utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
@@ -396,11 +397,6 @@ const handleDownloadMarkdown = async () => {
   }
 }
 
-const formatDateTime = (value) => {
-  if (!value) return '-'
-  return String(value).replace('T', ' ').slice(0, 19)
-}
-
 const safeFilename = (title) => {
   return (title || '会议纪要').replace(/[\\/:*?"<>|]/g, '_')
 }
@@ -412,26 +408,129 @@ const handleExportPdf = async () => {
   }
 
   exportingPdf.value = true
+  let pdfClone = null
+  let loadingInstance = null
+
   try {
-    // 按需加载，避免详情页首屏加载 PDF 库
-    const { default: html2pdf } = await import('html2pdf.js')
+    // 直接使用 html2pdf 的底层库，绕开 html2pdf 内部的离屏容器。
+    // 该容器在部分环境下会被 html2canvas 裁剪，导致导出空白页。
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf')
+    ])
 
-    await html2pdf()
-      .set({
-        margin: [10, 10, 12, 10],
-        filename: `${safeFilename(meetingStore.currentMeeting?.title)}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['css', 'legacy'] }
-      })
-      .from(pdfTemplate.value)
-      .save()
+    pdfClone = pdfTemplate.value.cloneNode(true)
+    Object.assign(pdfClone.style, {
+      position: 'fixed',
+      left: '0',
+      top: '0',
+      width: '794px',
+      minHeight: '1px',
+      padding: '40px 48px',
+      background: '#ffffff',
+      color: '#0b0b0b',
+      zIndex: '1500',
+      pointerEvents: 'none',
+      display: 'block',
+      boxSizing: 'border-box'
+    })
+    document.body.appendChild(pdfClone)
 
+    loadingInstance = ElLoading.service({
+      lock: true,
+      text: '正在生成 PDF...',
+      background: 'rgba(0, 0, 0, 0.55)'
+    })
+
+    // 等待克隆节点完成布局
+    await new Promise(resolve => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve))
+    })
+
+    // 直接对可见模板截图，不再经过 html2pdf 的离屏容器
+    const canvas = await html2canvas(pdfClone, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      scrollX: 0,
+      scrollY: 0,
+      logging: false
+    })
+
+    // 检查画布是否全白，避免把空白图写进 PDF
+    const ctx = canvas.getContext('2d')
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+    let nonWhiteSamples = 0
+    // 稀疏采样，避免遍历上百万像素
+    for (let i = 0; i < pixels.length; i += 4 * 50) {
+      if (pixels[i] < 245 || pixels[i + 1] < 245 || pixels[i + 2] < 245) {
+        nonWhiteSamples += 1
+        if (nonWhiteSamples > 20) break
+      }
+    }
+    if (nonWhiteSamples < 20) {
+      throw new Error('导出内容为空（画布全白），请检查纪要模板')
+    }
+
+    const filename = `${safeFilename(meetingStore.currentMeeting?.title)}.pdf`
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+
+    const pageWidth = 210
+    const pageHeight = 297
+    const margin = 10
+    const contentWidth = pageWidth - margin * 2
+    const contentHeight = pageHeight - margin * 2
+    const pxPerMm = canvas.width / contentWidth
+    const pageHeightPx = Math.max(1, Math.floor(contentHeight * pxPerMm))
+
+    let offset = 0
+    let pageIndex = 0
+
+    while (offset < canvas.height) {
+      const sliceHeight = Math.min(pageHeightPx, canvas.height - offset)
+      const pageCanvas = document.createElement('canvas')
+      pageCanvas.width = canvas.width
+      pageCanvas.height = sliceHeight
+
+      const pageCtx = pageCanvas.getContext('2d')
+      pageCtx.fillStyle = '#ffffff'
+      pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height)
+      pageCtx.drawImage(
+        canvas,
+        0, offset, canvas.width, sliceHeight,
+        0, 0, canvas.width, sliceHeight
+      )
+
+      const imgData = pageCanvas.toDataURL('image/jpeg', 0.95)
+      if (pageIndex > 0) {
+        pdf.addPage()
+      }
+
+      pdf.addImage(
+        imgData,
+        'JPEG',
+        margin,
+        margin,
+        contentWidth,
+        sliceHeight / pxPerMm,
+        undefined,
+        'FAST'
+      )
+
+      offset += sliceHeight
+      pageIndex += 1
+    }
+
+    pdf.save(filename)
     ElMessage.success('PDF 导出成功')
   } catch (error) {
-    ElMessage.error('PDF 导出失败')
+    console.error('PDF 导出失败:', error)
+    ElMessage.error(`PDF 导出失败: ${error?.message || '未知错误'}`)
   } finally {
+    loadingInstance?.close()
+    if (pdfClone && pdfClone.parentNode) {
+      pdfClone.parentNode.removeChild(pdfClone)
+    }
     exportingPdf.value = false
   }
 }

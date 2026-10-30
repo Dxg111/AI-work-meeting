@@ -91,6 +91,13 @@ const handleLogin = async () => {
   loading.value = true
   try {
     await authStore.login(form.username.trim(), form.password)
+
+    if (authStore.user?.must_change_password) {
+      ElMessage.warning('首次登录，请先修改初始密码')
+      await router.replace('/profile')
+      return
+    }
+
     ElMessage.success('登录成功')
 
     // 只接受站内路径，避免开放重定向

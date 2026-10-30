@@ -35,6 +35,7 @@ CREATE TABLE t_user (
     role ENUM('super_admin', 'normal_user') NOT NULL DEFAULT 'normal_user' COMMENT '角色：super_admin=超级管理员, normal_user=普通用户',
     dept_id INT DEFAULT NULL COMMENT '所属部门ID',
     is_active TINYINT(1) NOT NULL DEFAULT 1 COMMENT '账号状态：1=启用, 0=禁用',
+    must_change_password TINYINT(1) NOT NULL DEFAULT 0 COMMENT '首次登录需修改密码：1=是, 0=否',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     FOREIGN KEY (dept_id) REFERENCES t_dept(dept_id) ON DELETE SET NULL,
@@ -129,8 +130,8 @@ INSERT INTO t_dept (dept_name, dept_desc) VALUES
 
 -- 插入超级管理员账号（初始密码：Admin@123456）
 -- 密码哈希由 bcrypt.hashpw(b'Admin@123456', bcrypt.gensalt(rounds=12)) 生成
-INSERT INTO t_user (username, password_hash, nickname, role, dept_id, is_active) VALUES
-('admin', '$2b$12$Z.Hw3smcFVeylkd3su3bL.8HHQQUSUGlz16hXBOOPOTq1aKrzHQze', '系统管理员', 'super_admin', 1, 1);
+INSERT INTO t_user (username, password_hash, nickname, role, dept_id, is_active, must_change_password) VALUES
+('admin', '$2b$12$Z.Hw3smcFVeylkd3su3bL.8HHQQUSUGlz16hXBOOPOTq1aKrzHQze', '系统管理员', 'super_admin', 1, 1, 1);
 
 -- 生产环境首次登录后必须修改初始密码
 

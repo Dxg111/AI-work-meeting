@@ -75,6 +75,13 @@ request.interceptors.response.use(
         }
       } else if (status === 403) {
         ElMessage.error(message || '无权限访问')
+        if (
+          message &&
+          message.includes('请先修改初始密码') &&
+          !window.location.pathname.startsWith('/profile')
+        ) {
+          window.location.href = '/profile'
+        }
       } else if (status === 404) {
         ElMessage.error(message || '请求的资源不存在')
       } else if (status === 500) {

@@ -54,39 +54,46 @@ const router = createRouter({
 })
 
 // 路由守卫：未登录统一跳转登录页
-router.beforeEach((to, from, next) => {
+// vue-router 5 推荐直接 return 目标路由，不再使用 next()
+router.beforeEach((to) => {
   document.title = to.meta.title
     ? `${to.meta.title} · 智能会议纪要助手系统`
     : '智能会议纪要助手系统'
 
   const token = localStorage.getItem('token')
 
+  let user = null
+  try {
+    user = JSON.parse(localStorage.getItem('user') || 'null')
+  } catch (error) {
+    user = null
+  }
+
   if (to.meta.public) {
-    // 已登录用户访问登录页时直接进入统计首页
+    // 已登录用户访问登录页时直接进入首页；首次登录先改密码
     if (token && to.name === 'Login') {
-      return next('/stats')
+      return user?.must_change_password ? '/profile' : '/stats'
     }
-    return next()
+    return true
   }
 
   if (!token) {
-    return next({ path: '/login', query: { redirect: to.fullPath } })
+    return { path: '/login', query: { redirect: to.fullPath } }
+  }
+
+  // 首次登录/管理员重置密码后，必须先修改密码
+  if (user?.must_change_password && !['/profile', '/login'].includes(to.path)) {
+    return '/profile'
   }
 
   // 后台管理页面仅超级管理员可访问
   if (to.meta.requiresAdmin) {
-    let user = null
-    try {
-      user = JSON.parse(localStorage.getItem('user') || 'null')
-    } catch (error) {
-      user = null
-    }
     if (!user || user.role !== 'super_admin') {
-      return next('/stats')
+      return '/stats'
     }
   }
 
-  next()
+  return true
 })
 
 export default router

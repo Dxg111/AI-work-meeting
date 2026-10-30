@@ -54,6 +54,23 @@
             :value="dept.dept_id"
           />
         </el-select>
+
+        <el-select
+          v-if="authStore.isSuperAdmin"
+          v-model="filterUser"
+          placeholder="筛选创建人"
+          clearable
+          filterable
+          style="width: 180px; margin-left: 10px"
+          @change="handleSearch"
+        >
+          <el-option
+            v-for="user in userOptions"
+            :key="user.user_id"
+            :label="user.nickname || user.username"
+            :value="user.user_id"
+          />
+        </el-select>
       </div>
     </el-card>
 
@@ -83,7 +100,9 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="created_at" label="创建时间" width="180" />
+        <el-table-column label="创建时间" width="180">
+          <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
+        </el-table-column>
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button
@@ -187,10 +206,11 @@ import { useRouter } from 'vue-router'
 import { useMeetingStore } from '@/store/meeting'
 import { useAuthStore } from '@/store/auth'
 import { uploadMeeting } from '@/api/meeting'
-import { getDeptOptions } from '@/api/org'
+import { getDeptOptions, getUserOptions } from '@/api/org'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, Search } from '@element-plus/icons-vue'
 import { createPoller, isProcessingStatus } from '@/utils/poll'
+import { formatDateTime } from '@/utils/datetime'
 
 const router = useRouter()
 const meetingStore = useMeetingStore()
@@ -201,6 +221,8 @@ const searchTitle = ref('')
 const filterStatus = ref('')
 const filterDept = ref(null)
 const deptOptions = ref([])
+const filterUser = ref(null)
+const userOptions = ref([])
 
 // 上传对话框
 const showUploadDialog = ref(false)
@@ -253,12 +275,22 @@ const loadDeptOptions = async () => {
   }
 }
 
+const loadUserOptions = async () => {
+  try {
+    const response = await getUserOptions()
+    userOptions.value = response.data
+  } catch (error) {
+    // 错误提示由 Axios 拦截器处理
+  }
+}
+
 const handleSearch = () => {
   meetingStore.fetchMeetingList({
     page: 1,
     title: searchTitle.value,
     status: filterStatus.value,
-    dept_id: filterDept.value ?? undefined
+    dept_id: filterDept.value ?? undefined,
+    user_id: filterUser.value ?? undefined
   })
 }
 
@@ -268,7 +300,8 @@ const handlePageChange = (page) => {
     page,
     title: searchTitle.value,
     status: filterStatus.value,
-    dept_id: filterDept.value ?? undefined
+    dept_id: filterDept.value ?? undefined,
+    user_id: filterUser.value ?? undefined
   })
 }
 
@@ -278,7 +311,8 @@ const handleSizeChange = (size) => {
     page_size: size,
     title: searchTitle.value,
     status: filterStatus.value,
-    dept_id: filterDept.value ?? undefined
+    dept_id: filterDept.value ?? undefined,
+    user_id: filterUser.value ?? undefined
   })
 }
 
@@ -418,7 +452,8 @@ const startPolling = () => {
       await meetingStore.fetchMeetingList({
         title: searchTitle.value,
         status: filterStatus.value,
-        dept_id: filterDept.value ?? undefined
+        dept_id: filterDept.value ?? undefined,
+        user_id: filterUser.value ?? undefined
       })
       return meetingStore.meetingList
     },
@@ -443,6 +478,7 @@ const stopPolling = () => {
 onMounted(async () => {
   if (authStore.isSuperAdmin) {
     loadDeptOptions()
+    loadUserOptions()
   }
 
   await meetingStore.fetchMeetingList()

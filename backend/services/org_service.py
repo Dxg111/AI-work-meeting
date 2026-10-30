@@ -117,6 +117,13 @@ class OrgService:
 
     # ==================== 用户 ====================
 
+    async def list_user_options(self, db: AsyncSession):
+        """用户下拉选项（用于会议列表按创建人筛选）"""
+        result = await db.execute(
+            select(User.user_id, User.username, User.nickname).order_by(User.username.asc())
+        )
+        return result.all()
+
     async def list_users(
         self,
         page: int,
@@ -176,6 +183,7 @@ class OrgService:
             role=payload.role,
             dept_id=payload.dept_id,
             is_active=True,
+            must_change_password=True,
         )
         db.add(user)
         await db.commit()
@@ -222,6 +230,7 @@ class OrgService:
     async def reset_password(self, user_id: int, new_password: str, db: AsyncSession) -> None:
         user = await self.get_user(user_id, db)
         user.password_hash = hash_password(new_password)
+        user.must_change_password = True
         await db.commit()
 
     async def delete_user(self, user_id: int, current_admin_id: int, db: AsyncSession) -> None:

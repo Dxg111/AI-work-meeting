@@ -72,6 +72,7 @@ class AuthService:
             raise BusinessException("原密码错误")
 
         user.password_hash = hash_password(new_password)
+        user.must_change_password = False
         await db.commit()
 
     async def update_avatar(
