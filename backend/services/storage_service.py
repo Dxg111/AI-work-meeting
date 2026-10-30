@@ -83,6 +83,50 @@ class StorageService:
 
         return True, "OK"
 
+    async def save_avatar(self, file: UploadFile, user_id: int) -> str:
+        """
+        保存用户头像
+
+        Returns:
+            相对访问路径，例如 /uploads/avatars/avatar_1_xxx.png
+        """
+        file_ext = os.path.splitext(file.filename or "")[1].lower()
+        if file_ext not in settings.ALLOWED_AVATAR_EXTENSIONS:
+            allowed = ", ".join(settings.ALLOWED_AVATAR_EXTENSIONS)
+            raise BusinessException(f"不支持的头像格式 {file_ext or '未知'}，仅支持: {allowed}")
+
+        if file.content_type and not file.content_type.startswith("image/"):
+            raise BusinessException("头像文件必须是图片")
+
+        content = await file.read()
+        if len(content) > settings.MAX_AVATAR_SIZE:
+            raise BusinessException(
+                f"头像大小不能超过 {settings.MAX_AVATAR_SIZE / 1024 / 1024:.0f}MB"
+            )
+
+        avatar_dir = self.upload_dir / "avatars"
+        avatar_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = f"avatar_{user_id}_{timestamp}_{uuid.uuid4().hex[:8]}{file_ext}"
+        file_path = avatar_dir / filename
+
+        try:
+            with open(file_path, "wb") as f:
+                f.write(content)
+        except Exception as e:
+            raise BusinessException(f"头像保存失败: {str(e)}")
+
+        return f"/uploads/avatars/{filename}"
+
+    def delete_avatar(self, avatar_url: str) -> None:
+        """删除旧头像文件（仅处理本地上传目录下的头像）"""
+        if not avatar_url or not avatar_url.startswith("/uploads/avatars/"):
+            return
+
+        relative = avatar_url[len("/uploads/"):]
+        self.delete_file(str(self.upload_dir / relative))
+
     def delete_file(self, file_path: str) -> None:
         """删除文件"""
         try:

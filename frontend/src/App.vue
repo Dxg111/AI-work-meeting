@@ -39,7 +39,9 @@
             @command="handleCommand"
           >
             <span class="user-info">
-              <el-icon><UserFilled /></el-icon>
+              <el-avatar :size="26" :src="authStore.user?.avatar_url" class="header-avatar">
+                <el-icon><UserFilled /></el-icon>
+              </el-avatar>
               <span class="user-name">{{ authStore.displayName }}</span>
               <el-tag
                 v-if="authStore.isSuperAdmin"
@@ -54,7 +56,10 @@
 
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="logout" :icon="SwitchButton">
+                <el-dropdown-item command="profile" :icon="User">
+                  个人中心
+                </el-dropdown-item>
+                <el-dropdown-item command="logout" :icon="SwitchButton" divided>
                   退出登录
                 </el-dropdown-item>
               </el-dropdown-menu>
@@ -74,7 +79,7 @@
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, SwitchButton, UserFilled } from '@element-plus/icons-vue'
+import { ArrowDown, SwitchButton, User, UserFilled } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/store/auth'
 
 const route = useRoute()
@@ -98,6 +103,11 @@ onMounted(async () => {
 })
 
 const handleCommand = async (command) => {
+  if (command === 'profile') {
+    router.push('/profile')
+    return
+  }
+
   if (command !== 'logout') return
 
   await authStore.logout()
@@ -183,6 +193,13 @@ const handleCommand = async (command) => {
 
 .user-name {
   font-size: 14px;
+}
+
+.header-avatar {
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  flex-shrink: 0;
 }
 
 .el-main {

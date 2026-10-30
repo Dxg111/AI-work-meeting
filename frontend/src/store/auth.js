@@ -2,7 +2,14 @@
  * 登录状态管理
  */
 import { defineStore } from 'pinia'
-import { login as loginApi, getMe, logout as logoutApi } from '@/api/auth'
+import {
+  changePassword as changePasswordApi,
+  getMe,
+  login as loginApi,
+  logout as logoutApi,
+  updateProfile as updateProfileApi,
+  uploadAvatar as uploadAvatarApi
+} from '@/api/auth'
 
 const TOKEN_KEY = 'token'
 const USER_KEY = 'user'
@@ -51,6 +58,39 @@ export const useAuthStore = defineStore('auth', {
       this.user = response.data
       localStorage.setItem(USER_KEY, JSON.stringify(this.user))
       return response
+    },
+
+    /**
+     * 修改个人资料
+     */
+    async updateProfile(payload) {
+      const response = await updateProfileApi(payload)
+      this.user = response.data
+      localStorage.setItem(USER_KEY, JSON.stringify(this.user))
+      return response
+    },
+
+    /**
+     * 上传头像
+     */
+    async uploadAvatar(file) {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await uploadAvatarApi(formData)
+      this.user = { ...(this.user || {}), avatar_url: response.data.avatar_url }
+      localStorage.setItem(USER_KEY, JSON.stringify(this.user))
+      return response
+    },
+
+    /**
+     * 修改本人密码
+     */
+    async changePassword(oldPassword, newPassword) {
+      return changePasswordApi({
+        old_password: oldPassword,
+        new_password: newPassword
+      })
     },
 
     /**

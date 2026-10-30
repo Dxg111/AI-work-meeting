@@ -23,6 +23,12 @@ const routes = [
     meta: { title: '会议详情' }
   },
   {
+    path: '/profile',
+    name: 'Profile',
+    component: () => import('@/views/Profile.vue'),
+    meta: { title: '个人中心' }
+  },
+  {
     path: '/depts',
     name: 'DeptManagement',
     component: () => import('@/views/DeptManagement.vue'),

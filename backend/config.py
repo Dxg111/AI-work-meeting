@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE: int = 500 * 1024 * 1024  # 500MB
     ALLOWED_EXTENSIONS: list = [".mp3", ".wav", ".m4a", ".mp4", ".avi", ".mov"]
 
+    # 头像上传配置
+    MAX_AVATAR_SIZE: int = 2 * 1024 * 1024  # 2MB
+    ALLOWED_AVATAR_EXTENSIONS: list = [".jpg", ".jpeg", ".png", ".gif", ".webp"]
+
     # 公网访问地址（必须配置，用于 ASR 下载音频）
     PUBLIC_BASE_URL: str = "http://localhost:8000"
 
