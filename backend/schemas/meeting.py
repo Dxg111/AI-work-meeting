@@ -91,6 +91,14 @@ class MeetingOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    # 列表/详情展示与权限标记（查询时填充）
+    creator_username: Optional[str] = None
+    creator_name: Optional[str] = None
+    dept_id: Optional[int] = None
+    dept_name: Optional[str] = None
+    can_edit: Optional[bool] = None
+    is_shared: Optional[bool] = None
+
     class Config:
         from_attributes = True
 

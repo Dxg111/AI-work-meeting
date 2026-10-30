@@ -38,6 +38,22 @@
           <el-option label="已完成" value="done" />
           <el-option label="失败" value="failed" />
         </el-select>
+
+        <el-select
+          v-if="authStore.isSuperAdmin"
+          v-model="filterDept"
+          placeholder="筛选部门"
+          clearable
+          style="width: 160px; margin-left: 10px"
+          @change="handleSearch"
+        >
+          <el-option
+            v-for="dept in deptOptions"
+            :key="dept.dept_id"
+            :label="dept.dept_name"
+            :value="dept.dept_id"
+          />
+        </el-select>
       </div>
     </el-card>
 
@@ -50,10 +66,20 @@
       >
         <el-table-column prop="meeting_id" label="ID" width="80" />
         <el-table-column prop="title" label="会议标题" min-width="200" />
-        <el-table-column label="状态" width="120">
+        <el-table-column prop="creator_name" label="创建人" width="120" />
+        <el-table-column prop="dept_name" label="部门" width="120" />
+        <el-table-column label="状态" width="150">
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)">
               {{ getStatusText(row.status) }}
+            </el-tag>
+            <el-tag
+              v-if="row.is_shared"
+              type="info"
+              size="small"
+              style="margin-left: 4px"
+            >
+              只读
             </el-tag>
           </template>
         </el-table-column>
@@ -61,7 +87,7 @@
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button
-              v-if="['uploaded', 'failed', 'transcribed'].includes(row.status)"
+              v-if="row.can_edit && ['uploaded', 'failed', 'transcribed'].includes(row.status)"
               type="primary"
               size="small"
               @click.stop="handleProcess(row)"
@@ -76,6 +102,7 @@
               详情
             </el-button>
             <el-button
+              v-if="row.can_edit"
               type="danger"
               size="small"
               @click.stop="handleDelete(row)"
@@ -158,17 +185,22 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMeetingStore } from '@/store/meeting'
+import { useAuthStore } from '@/store/auth'
 import { uploadMeeting } from '@/api/meeting'
+import { getDeptOptions } from '@/api/org'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, Search } from '@element-plus/icons-vue'
 import { createPoller, isProcessingStatus } from '@/utils/poll'
 
 const router = useRouter()
 const meetingStore = useMeetingStore()
+const authStore = useAuthStore()
 
 // 搜索筛选
 const searchTitle = ref('')
 const filterStatus = ref('')
+const filterDept = ref(null)
+const deptOptions = ref([])
 
 // 上传对话框
 const showUploadDialog = ref(false)
@@ -212,11 +244,21 @@ const getStatusText = (status) => {
 }
 
 // 搜索
+const loadDeptOptions = async () => {
+  try {
+    const response = await getDeptOptions()
+    deptOptions.value = response.data
+  } catch (error) {
+    // 错误提示由 Axios 拦截器处理
+  }
+}
+
 const handleSearch = () => {
   meetingStore.fetchMeetingList({
     page: 1,
     title: searchTitle.value,
-    status: filterStatus.value
+    status: filterStatus.value,
+    dept_id: filterDept.value ?? undefined
   })
 }
 
@@ -225,7 +267,8 @@ const handlePageChange = (page) => {
   meetingStore.fetchMeetingList({
     page,
     title: searchTitle.value,
-    status: filterStatus.value
+    status: filterStatus.value,
+    dept_id: filterDept.value ?? undefined
   })
 }
 
@@ -234,7 +277,8 @@ const handleSizeChange = (size) => {
     page: 1,
     page_size: size,
     title: searchTitle.value,
-    status: filterStatus.value
+    status: filterStatus.value,
+    dept_id: filterDept.value ?? undefined
   })
 }
 
@@ -301,6 +345,11 @@ const handleUpload = async () => {
 
 // 处理会议
 const handleProcess = async (row) => {
+  if (!row.can_edit) {
+    ElMessage.warning('无权操作该会议')
+    return
+  }
+
   try {
     const response = await meetingStore.processMeeting(row.meeting_id)
 
@@ -328,6 +377,11 @@ const handleRowClick = (row) => {
 
 // 删除
 const handleDelete = async (row) => {
+  if (!row.can_edit) {
+    ElMessage.warning('无权操作该会议')
+    return
+  }
+
   try {
     await ElMessageBox.confirm(
       `确定要删除会议"${row.title}"吗？此操作不可恢复。`,
@@ -363,7 +417,8 @@ const startPolling = () => {
     async () => {
       await meetingStore.fetchMeetingList({
         title: searchTitle.value,
-        status: filterStatus.value
+        status: filterStatus.value,
+        dept_id: filterDept.value ?? undefined
       })
       return meetingStore.meetingList
     },
@@ -385,8 +440,12 @@ const stopPolling = () => {
 }
 
 // 页面加载
-onMounted(() => {
-  meetingStore.fetchMeetingList()
+onMounted(async () => {
+  if (authStore.isSuperAdmin) {
+    loadDeptOptions()
+  }
+
+  await meetingStore.fetchMeetingList()
 
   // 检查是否有处理中的会议，如果有则启动轮询
   const hasProcessing = meetingStore.meetingList.some(m => isProcessingStatus(m.status))

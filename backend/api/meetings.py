@@ -11,7 +11,9 @@ from core.database import get_db
 from core.response import success, error
 from core.exceptions import BusinessException
 from core.security import get_current_user
+from core.permissions import get_meeting_for_user
 from models.user import User
+from models.dept import Department
 from models.meeting import Meeting
 from models.transcript import Transcript
 from models.speaker import Speaker
@@ -26,6 +28,27 @@ from services.llm_service import llm_service
 import json
 
 router = APIRouter(prefix="/meetings", tags=["会议管理"])
+
+
+def _meeting_out(
+    meeting: Meeting,
+    creator: Optional[User],
+    dept: Optional[Department],
+    current_user: User,
+) -> MeetingOut:
+    """构建带创建人/部门信息与权限标记的会议输出"""
+    out = MeetingOut.model_validate(meeting)
+    is_owner = meeting.create_user_id == current_user.user_id
+    can_edit = is_owner or current_user.role == "super_admin"
+
+    return out.model_copy(update={
+        "creator_username": creator.username if creator else None,
+        "creator_name": (creator.nickname or creator.username) if creator else None,
+        "dept_id": creator.dept_id if creator else None,
+        "dept_name": dept.dept_name if dept else None,
+        "can_edit": can_edit,
+        "is_shared": (not can_edit) and bool(meeting.share_dept),
+    })
 
 
 @router.post("/upload", summary="上传会议音视频")
@@ -126,16 +149,19 @@ async def get_meeting_list(
     page_size: int = Query(10, ge=1, le=100, description="每页数量"),
     title: Optional[str] = Query(None, description="标题搜索"),
     status: Optional[str] = Query(None, description="状态筛选"),
+    dept_id: Optional[int] = Query(None, description="按创建人部门筛选（仅超级管理员）"),
+    user_id: Optional[int] = Query(None, description="按创建人筛选（仅超级管理员）"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     获取会议列表（分页、搜索、筛选）
 
-    MVP 阶段：返回所有会议（无权限过滤）
+    数据权限：
+    - 超级管理员：全部会议，可按部门/创建人筛选
+    - 普通用户：本人会议 + 同部门已分享会议（只读）
     """
     try:
-        # 构建查询条件
         conditions = []
 
         if title:
@@ -144,27 +170,56 @@ async def get_meeting_list(
         if status:
             conditions.append(Meeting.status == status)
 
-        # 查询总数
-        count_query = select(func.count(Meeting.meeting_id))
-        if conditions:
-            count_query = count_query.where(and_(*conditions))
+        if current_user.role == "super_admin":
+            if dept_id is not None:
+                conditions.append(User.dept_id == dept_id)
+            if user_id is not None:
+                conditions.append(Meeting.create_user_id == user_id)
+        else:
+            # 普通用户：本人 OR 同部门分享
+            if current_user.dept_id is None:
+                conditions.append(Meeting.create_user_id == current_user.user_id)
+            else:
+                conditions.append(or_(
+                    Meeting.create_user_id == current_user.user_id,
+                    and_(
+                        Meeting.share_dept.is_(True),
+                        User.dept_id == current_user.dept_id,
+                    ),
+                ))
 
-        total_result = await db.execute(count_query)
-        total = total_result.scalar()
+        query = (
+            select(Meeting, User, Department)
+            .join(User, Meeting.create_user_id == User.user_id)
+            .outerjoin(Department, User.dept_id == Department.dept_id)
+        )
+        count_query = (
+            select(func.count(Meeting.meeting_id))
+            .select_from(Meeting)
+            .join(User, Meeting.create_user_id == User.user_id)
+        )
 
-        # 查询列表
-        query = select(Meeting).order_by(Meeting.created_at.desc())
         if conditions:
             query = query.where(and_(*conditions))
+            count_query = count_query.where(and_(*conditions))
 
-        query = query.offset((page - 1) * page_size).limit(page_size)
+        total = await db.scalar(count_query)
 
-        result = await db.execute(query)
-        meetings = result.scalars().all()
+        rows = await db.execute(
+            query
+            .order_by(Meeting.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+
+        items = [
+            _meeting_out(meeting, creator, dept, current_user)
+            for meeting, creator, dept in rows.all()
+        ]
 
         return success(data={
-            "list": [MeetingOut.model_validate(m) for m in meetings],
-            "total": total,
+            "list": items,
+            "total": total or 0,
             "page": page,
             "page_size": page_size
         })
@@ -181,21 +236,26 @@ async def get_meeting_detail(
 ):
     """
     获取会议详情（包含转写、发言人、纪要）
+
+    权限：创建人、超级管理员、同部门已分享会议的用户
     """
+    # 权限校验在 try 之外：越权时由全局异常处理器返回 403
+    meeting, creator = await get_meeting_for_user(db, meeting_id, current_user)
+    dept = await db.get(Department, creator.dept_id) if creator and creator.dept_id else None
+
     try:
         detail = await meeting_service.get_meeting_detail(meeting_id, db)
 
         if not detail:
             return error(message="会议不存在", code=404)
 
-        meeting = detail["meeting"]
         transcripts = detail["transcripts"]
         speakers = detail["speakers"]
         minutes = detail["minutes"]
 
         # 构建返回数据
         result = {
-            "meeting": MeetingOut.model_validate(meeting),
+            "meeting": _meeting_out(meeting, creator, dept, current_user),
             "transcripts": [TranscriptOut.model_validate(t) for t in transcripts],
             "speakers": [SpeakerOut.model_validate(s) for s in speakers],
             "minutes": None
@@ -243,6 +303,7 @@ async def delete_meeting(
     current_user: User = Depends(get_current_user),
 ):
     """删除会议（级联删除关联数据）"""
+    await get_meeting_for_user(db, meeting_id, current_user, require_edit=True)
     try:
         await meeting_service.delete_meeting(meeting_id, db)
         return success(message="删除成功")
@@ -261,6 +322,7 @@ async def trigger_process(
     current_user: User = Depends(get_current_user),
 ):
     """手动触发完整流水线（ASR → LLM）"""
+    await get_meeting_for_user(db, meeting_id, current_user, require_edit=True)
     try:
         await meeting_service.trigger_pipeline(meeting_id, db, background_tasks)
         return success(message="处理已启动")
@@ -279,6 +341,7 @@ async def rename_speakers(
     current_user: User = Depends(get_current_user),
 ):
     """批量重命名发言人"""
+    await get_meeting_for_user(db, meeting_id, current_user, require_edit=True)
     try:
         rename_map = {u.speaker_id: u.speaker_name for u in updates}
         await speaker_service.batch_rename_speakers(meeting_id, rename_map, db)
@@ -297,6 +360,7 @@ async def get_markdown(
     current_user: User = Depends(get_current_user),
 ):
     """获取完整 Markdown 纪要（用于导出）"""
+    await get_meeting_for_user(db, meeting_id, current_user)
     try:
         result = await db.execute(
             select(Minutes).where(Minutes.meeting_id == meeting_id)
@@ -320,6 +384,7 @@ async def update_share_setting(
     current_user: User = Depends(get_current_user),
 ):
     """开启/关闭部门分享"""
+    await get_meeting_for_user(db, meeting_id, current_user, require_edit=True)
     try:
         await meeting_service.update_share_setting(meeting_id, share_dept, db)
         return success(message="分享设置已更新")

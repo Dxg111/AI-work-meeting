@@ -8,7 +8,8 @@ import {
   deleteMeeting,
   triggerProcess,
   renameSpeakers,
-  getMarkdown
+  getMarkdown,
+  updateShareSetting
 } from '@/api/meeting'
 
 export const useMeetingStore = defineStore('meeting', {
@@ -41,7 +42,9 @@ export const useMeetingStore = defineStore('meeting', {
           page: params.page || this.currentPage,
           page_size: params.page_size || this.pageSize,
           title: params.title,
-          status: params.status
+          status: params.status,
+          dept_id: params.dept_id,
+          user_id: params.user_id
         })
 
         if (response.code === 200) {
@@ -139,6 +142,25 @@ export const useMeetingStore = defineStore('meeting', {
         console.error('重命名发言人失败:', error)
         throw error
       }
+    },
+
+    /**
+     * 修改部门分享设置
+     */
+    async updateShare(meetingId, shareDept) {
+      const response = await updateShareSetting(meetingId, shareDept)
+
+      if (response.code === 200) {
+        if (this.currentMeeting && this.currentMeeting.meeting_id === meetingId) {
+          this.currentMeeting.share_dept = shareDept ? 1 : 0
+        }
+        const item = this.meetingList.find(m => m.meeting_id === meetingId)
+        if (item) {
+          item.share_dept = shareDept ? 1 : 0
+        }
+      }
+
+      return response
     },
 
     /**

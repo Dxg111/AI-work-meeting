@@ -26,6 +26,12 @@
             {{ getStatusText(meetingStore.currentMeeting.status) }}
           </el-tag>
         </el-descriptions-item>
+        <el-descriptions-item label="创建人">
+          {{ meetingStore.currentMeeting.creator_name || '-' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="所属部门">
+          {{ meetingStore.currentMeeting.dept_name || '未分配' }}
+        </el-descriptions-item>
         <el-descriptions-item label="创建时间">
           {{ meetingStore.currentMeeting.created_at }}
         </el-descriptions-item>
@@ -44,7 +50,7 @@
       <!-- 操作按钮 -->
       <div class="actions" style="margin-top: 20px">
         <el-button
-          v-if="['uploaded', 'failed', 'transcribed'].includes(meetingStore.currentMeeting.status)"
+          v-if="canEdit && ['uploaded', 'failed', 'transcribed'].includes(meetingStore.currentMeeting.status)"
           type="primary"
           @click="handleProcess"
         >
@@ -60,8 +66,26 @@
         <el-button type="info" @click="handleRefresh">
           刷新
         </el-button>
+
+        <el-switch
+          v-if="canEdit"
+          v-model="shareDept"
+          active-text="部门内分享"
+          style="margin-left: 12px"
+          @change="handleShareChange"
+        />
       </div>
     </el-card>
+
+    <!-- 只读分享提示 -->
+    <el-alert
+      v-if="meetingStore.currentMeeting && meetingStore.currentMeeting.is_shared"
+      title="该会议由同部门同事分享，仅可查看和导出，不能修改、删除或重新处理"
+      type="info"
+      :closable="false"
+      show-icon
+      style="margin-top: 20px"
+    />
 
     <!-- 转写中提示 -->
     <el-alert
@@ -78,7 +102,7 @@
       <template #header>
         <div class="card-header">
           <span>发言人列表</span>
-          <el-button size="small" @click="openSpeakerDialog">
+          <el-button v-if="canEdit" size="small" @click="openSpeakerDialog">
             重命名发言人
           </el-button>
         </div>
@@ -227,12 +251,15 @@ const meetingStore = useMeetingStore()
 const meetingId = ref(parseInt(route.params.id))
 const showSpeakerDialog = ref(false)
 const speakerRenames = ref([])
+const shareDept = ref(false)
 
 let poller = null
 
 const isProcessing = computed(() => {
   return meetingStore.currentMeeting && isProcessingStatus(meetingStore.currentMeeting.status)
 })
+
+const canEdit = computed(() => !!meetingStore.currentMeeting?.can_edit)
 
 const getStatusType = (status) => {
   const typeMap = {
@@ -272,6 +299,11 @@ const handleRefresh = () => {
 }
 
 const handleProcess = async () => {
+  if (!canEdit.value) {
+    ElMessage.warning('无权操作该会议')
+    return
+  }
+
   try {
     const response = await triggerProcess(meetingId.value)
 
@@ -307,7 +339,27 @@ const openSpeakerDialog = () => {
   showSpeakerDialog.value = true
 }
 
+const handleShareChange = async (value) => {
+  if (!canEdit.value) {
+    shareDept.value = !value
+    return
+  }
+
+  try {
+    await meetingStore.updateShare(meetingId.value, value)
+    ElMessage.success(value ? '已开启部门内分享' : '已关闭部门内分享')
+  } catch (error) {
+    // 失败时回滚开关状态
+    shareDept.value = !value
+  }
+}
+
 const handleRenameSpeakers = async () => {
+  if (!canEdit.value) {
+    ElMessage.warning('无权操作该会议')
+    return
+  }
+
   try {
     const response = await meetingStore.updateSpeakers(
       meetingId.value,
@@ -329,6 +381,7 @@ const handleRenameSpeakers = async () => {
 const loadMeetingDetail = async () => {
   try {
     await meetingStore.fetchMeetingDetail(meetingId.value)
+    shareDept.value = !!meetingStore.currentMeeting?.share_dept
   } catch (error) {
     ElMessage.error('加载失败: ' + error.message)
   }

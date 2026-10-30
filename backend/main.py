@@ -32,7 +32,7 @@ from core.exceptions import (
 import models
 
 # 导入路由
-from api import auth, meetings
+from api import auth, meetings, org
 
 # 确保上传目录存在（在应用创建前）
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
@@ -85,6 +85,7 @@ app.add_exception_handler(Exception, general_exception_handler)
 
 # 注册路由
 app.include_router(auth.router, prefix=settings.API_PREFIX)
+app.include_router(org.router, prefix=settings.API_PREFIX)
 app.include_router(meetings.router, prefix=settings.API_PREFIX)
 
 

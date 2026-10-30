@@ -3,7 +3,35 @@
     <el-container>
       <el-header v-if="!isLoginPage" height="60px">
         <div class="header-content">
-          <h1>智能会议纪要助手系统</h1>
+          <div class="header-left">
+            <h1>智能会议纪要助手系统</h1>
+
+            <nav class="nav">
+              <router-link
+                to="/"
+                class="nav-link"
+                :class="{ active: isMeetingPage }"
+              >
+                会议列表
+              </router-link>
+              <router-link
+                v-if="authStore.isSuperAdmin"
+                to="/depts"
+                class="nav-link"
+                :class="{ active: route.path === '/depts' }"
+              >
+                部门管理
+              </router-link>
+              <router-link
+                v-if="authStore.isSuperAdmin"
+                to="/users"
+                class="nav-link"
+                :class="{ active: route.path === '/users' }"
+              >
+                用户管理
+              </router-link>
+            </nav>
+          </div>
 
           <el-dropdown
             v-if="authStore.isLoggedIn"
@@ -54,6 +82,9 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const isLoginPage = computed(() => route.path === '/login')
+const isMeetingPage = computed(
+  () => route.path === '/' || route.path.startsWith('/meeting/')
+)
 
 onMounted(async () => {
   // 已有 token 但本地没有用户信息时，拉取一次当前用户
@@ -99,11 +130,40 @@ const handleCommand = async (command) => {
   justify-content: space-between;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
 .header-content h1 {
   margin: 0;
   font-size: 20px;
   font-weight: 500;
   letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-link {
+  color: rgba(255, 255, 255, 0.82);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  white-space: nowrap;
+}
+
+.nav-link:hover,
+.nav-link.active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
 }
 
 .user-info {
