@@ -127,12 +127,12 @@ INSERT INTO t_dept (dept_name, dept_desc) VALUES
 ('产品部', '产品管理部门'),
 ('运营部', '运营推广部门');
 
--- 插入超级管理员账号（初始密码：Admin@123456，bcrypt hash）
--- 密码hash是 bcrypt.hashpw(b'Admin@123456', bcrypt.gensalt(rounds=12))
+-- 插入超级管理员账号（初始密码：Admin@123456）
+-- 密码哈希由 bcrypt.hashpw(b'Admin@123456', bcrypt.gensalt(rounds=12)) 生成
 INSERT INTO t_user (username, password_hash, nickname, role, dept_id, is_active) VALUES
-('admin', '$2b$12$LQ3fG8nYH5z3rVGZk6mVJO7XxJzKp8Y9vZx5h3QJ4K8B0Y6m2H8gK', '系统管理员', 'super_admin', 1, 1);
+('admin', '$2b$12$Z.Hw3smcFVeylkd3su3bL.8HHQQUSUGlz16hXBOOPOTq1aKrzHQze', '系统管理员', 'super_admin', 1, 1);
 
--- 注意：上述密码哈希是示例，实际部署时需要用真实的 bcrypt 生成
+-- 生产环境首次登录后必须修改初始密码
 
 -- =============================================
 -- 完成

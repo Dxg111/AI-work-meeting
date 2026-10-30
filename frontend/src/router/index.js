@@ -5,6 +5,12 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
   {
+    path: '/login',
+    name: 'Login',
+    component: () => import('@/views/Login.vue'),
+    meta: { title: '登录', public: true }
+  },
+  {
     path: '/',
     name: 'MeetingList',
     component: () => import('@/views/MeetingList.vue'),
@@ -23,10 +29,26 @@ const router = createRouter({
   routes,
 })
 
-// 路由守卫
+// 路由守卫：未登录统一跳转登录页
 router.beforeEach((to, from, next) => {
-  // 设置页面标题
-  document.title = to.meta.title || '智能会议纪要助手系统'
+  document.title = to.meta.title
+    ? `${to.meta.title} · 智能会议纪要助手系统`
+    : '智能会议纪要助手系统'
+
+  const token = localStorage.getItem('token')
+
+  if (to.meta.public) {
+    // 已登录用户访问登录页时直接进入首页
+    if (token && to.name === 'Login') {
+      return next('/')
+    }
+    return next()
+  }
+
+  if (!token) {
+    return next({ path: '/login', query: { redirect: to.fullPath } })
+  }
+
   next()
 })
 

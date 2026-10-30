@@ -10,6 +10,8 @@ from config import settings
 from core.database import get_db
 from core.response import success, error
 from core.exceptions import BusinessException
+from core.security import get_current_user
+from models.user import User
 from models.meeting import Meeting
 from models.transcript import Transcript
 from models.speaker import Speaker
@@ -33,7 +35,8 @@ async def upload_meeting(
     auto_process: bool = Form(True, description="是否自动处理"),
     share_dept: bool = Form(False, description="是否部门分享"),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     上传会议音视频文件
@@ -49,7 +52,7 @@ async def upload_meeting(
             file_path="",
             file_url="",
             status="uploaded",
-            create_user_id=1,  # MVP 阶段固定为 admin 用户
+            create_user_id=current_user.user_id,
             share_dept=1 if share_dept else 0,
             auto_process=1 if auto_process else 0
         )
@@ -123,7 +126,8 @@ async def get_meeting_list(
     page_size: int = Query(10, ge=1, le=100, description="每页数量"),
     title: Optional[str] = Query(None, description="标题搜索"),
     status: Optional[str] = Query(None, description="状态筛选"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     获取会议列表（分页、搜索、筛选）
@@ -172,7 +176,8 @@ async def get_meeting_list(
 @router.get("/{meeting_id}", summary="会议详情")
 async def get_meeting_detail(
     meeting_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     获取会议详情（包含转写、发言人、纪要）
@@ -234,7 +239,8 @@ async def get_meeting_detail(
 @router.delete("/{meeting_id}", summary="删除会议")
 async def delete_meeting(
     meeting_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """删除会议（级联删除关联数据）"""
     try:
@@ -251,7 +257,8 @@ async def delete_meeting(
 async def trigger_process(
     meeting_id: int,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """手动触发完整流水线（ASR → LLM）"""
     try:
@@ -268,7 +275,8 @@ async def trigger_process(
 async def rename_speakers(
     meeting_id: int,
     updates: List[SpeakerUpdateRequest],
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """批量重命名发言人"""
     try:
@@ -285,7 +293,8 @@ async def rename_speakers(
 @router.get("/{meeting_id}/markdown", summary="获取 Markdown 纪要")
 async def get_markdown(
     meeting_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """获取完整 Markdown 纪要（用于导出）"""
     try:
@@ -307,7 +316,8 @@ async def get_markdown(
 async def update_share_setting(
     meeting_id: int,
     share_dept: bool,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """开启/关闭部门分享"""
     try:
