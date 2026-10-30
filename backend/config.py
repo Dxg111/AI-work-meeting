@@ -36,6 +36,8 @@ class Settings(BaseSettings):
 
     # ASR 配置
     ASR_PROVIDER: str = "funasr"  # funasr | mock
+    ASR_BASE_URL: str = "https://dashscope.aliyuncs.com/api/v1"  # 阿里云百炼 API 基础地址
+    ASR_MODEL: str = "paraformer-v2"  # 录音文件识别模型（支持说话人分离）
     DASHSCOPE_API_KEY: str = ""  # 阿里云百炼 API Key
 
     # LLM 配置

@@ -28,10 +28,11 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   (response) => {
-    const { code, message, data } = response.data
+    const { code, message } = response.data
 
     if (code === 200) {
-      return data
+      // 返回完整信封 { code, message, data }，与 Store/页面调用方保持一致
+      return response.data
     } else {
       ElMessage.error(message || '请求失败')
       return Promise.reject(new Error(message || '请求失败'))

@@ -1,7 +1,6 @@
 """
 LLM 纪要生成服务
 """
-import json
 from typing import Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -41,7 +40,9 @@ class LLMService:
             if not meeting:
                 raise BusinessException("会议不存在")
 
-            if meeting.status != "transcribed":
+            # transcribed：正常流程；summarizing：手动重试时已预先置位；
+            # failed：上一次在 LLM 阶段失败，允许基于已有转写重跑
+            if meeting.status not in ("transcribed", "summarizing", "failed"):
                 raise BusinessException(f"会议状态为 {meeting.status}，必须先完成转写")
 
             # 更新状态为 summarizing
@@ -127,16 +128,17 @@ class LLMService:
         )
         minutes = minutes_result.scalar_one_or_none()
 
-        # 序列化 JSON 字段
-        todos_json = json.dumps(result.todos, ensure_ascii=False) if result.todos else None
-        speaker_summary_json = json.dumps(result.speaker_summary, ensure_ascii=False) if result.speaker_summary else None
+        # JSON 列直接存 Python 对象，由 SQLAlchemy 负责序列化
+        # （不要再用 json.dumps，否则会变成“JSON 字符串”而不是 JSON 数组/对象）
+        todos_value = result.todos if result.todos else None
+        speaker_summary_value = result.speaker_summary if result.speaker_summary else None
 
         if minutes:
             # 更新已有纪要
             minutes.summary = result.summary
             minutes.keywords = result.keywords
-            minutes.todos = todos_json
-            minutes.speaker_summary = speaker_summary_json
+            minutes.todos = todos_value
+            minutes.speaker_summary = speaker_summary_value
             minutes.markdown = markdown
         else:
             # 新建纪要
@@ -144,8 +146,8 @@ class LLMService:
                 meeting_id=meeting_id,
                 summary=result.summary,
                 keywords=result.keywords,
-                todos=todos_json,
-                speaker_summary=speaker_summary_json,
+                todos=todos_value,
+                speaker_summary=speaker_summary_value,
                 markdown=markdown
             )
             db.add(minutes)

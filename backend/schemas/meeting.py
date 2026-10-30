@@ -75,3 +75,37 @@ class MeetingDetailResponse(BaseModel):
     transcripts: List[TranscriptResponse]
     speakers: List[SpeakerResponse]
     minutes: Optional[dict] = None
+
+
+class MeetingOut(BaseModel):
+    """会议输出模型"""
+    meeting_id: int
+    title: str
+    file_url: str
+    duration: Optional[int] = None
+    status: str
+    error_msg: Optional[str] = None
+    create_user_id: int
+    share_dept: int
+    auto_process: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MeetingDetailOut(BaseModel):
+    """会议详情输出"""
+    meeting: "MeetingOut"
+    transcripts: List[TranscriptResponse]
+    speakers: List[SpeakerResponse]
+    minutes: Optional[dict] = None
+
+
+class MeetingListOut(BaseModel):
+    """会议列表输出"""
+    list: List["MeetingOut"]
+    total: int
+    page: int
+    page_size: int

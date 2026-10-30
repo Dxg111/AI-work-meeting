@@ -90,7 +90,8 @@ class QwenLLMProvider(LLMProvider):
                 "关键词："
             )
 
-            chain = prompt | self.llm | StrOutputParser()
+            # 提取类任务固定 temperature=0，保证结果稳定
+            chain = prompt | self.llm.bind(temperature=0) | StrOutputParser()
             keywords = await chain.ainvoke({"text": text[:4000]})
 
             return keywords.strip()
@@ -102,12 +103,12 @@ class QwenLLMProvider(LLMProvider):
         """提取待办事项"""
         try:
             prompt = PromptTemplate.from_template(
-                "你是一个专业的会议纪要助手。请从以下会议内容中提取待办事项。\n\n"
+                "你是会议纪要助手。请从会议内容中提取所有行动项/待办事项，"
+                "包括“预计完成”“下周再碰”“需要注意”这类隐含行动。\n\n"
                 "要求：\n"
-                "1. 输出严格的JSON数组格式\n"
-                "2. 每个待办包含：content（事项内容）、owner（负责人，可为null）、deadline（截止时间，可为null）\n"
-                "3. 如果没有明确的待办事项，返回空数组 []\n"
-                "4. 不要添加markdown代码块标记，直接输出JSON\n\n"
+                "1. 只输出严格的JSON数组，不要任何解释或markdown代码块\n"
+                "2. 每项字段：content（事项内容）、owner（负责人，无法确定填null）、deadline（截止时间，无法确定填null）\n"
+                "3. 尽量提取，至少输出1项；确实没有任何行动项时才返回 []\n\n"
                 "示例输出：\n"
                 '[{{"content": "完成需求文档", "owner": "张三", "deadline": "本周五"}}, '
                 '{{"content": "联系供应商", "owner": null, "deadline": null}}]\n\n'
@@ -115,7 +116,8 @@ class QwenLLMProvider(LLMProvider):
                 "待办事项JSON："
             )
 
-            chain = prompt | self.llm | StrOutputParser()
+            # 提取类任务固定 temperature=0，保证 JSON 输出稳定
+            chain = prompt | self.llm.bind(temperature=0) | StrOutputParser()
             result = await chain.ainvoke({"text": text[:4000]})
 
             # 清洗输出（去除可能的代码块标记）
@@ -158,8 +160,26 @@ class QwenLLMProvider(LLMProvider):
 
     @staticmethod
     def _clean_json_output(text: str) -> str:
-        """清洗 LLM 输出的 JSON（去除 markdown 代码块）"""
+        """
+        清洗 LLM 输出的 JSON
+
+        - 去除 ```json ... ``` 代码块围栏
+        - 模型偶尔会在 JSON 前后附加解释文字，这里从第一个 [ 或 { 开始
+          用 raw_decode 提取第一个合法 JSON，避免整段解析失败
+        """
+        cleaned = text.strip()
+
         # 去除 ```json ... ``` 或 ``` ... ```
-        text = re.sub(r'^```(?:json)?\s*', '', text.strip())
-        text = re.sub(r'\s*```$', '', text.strip())
-        return text.strip()
+        cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
+        cleaned = re.sub(r'\s*```$', '', cleaned)
+
+        decoder = json.JSONDecoder()
+        for index, char in enumerate(cleaned):
+            if char in "[{":
+                try:
+                    obj, _ = decoder.raw_decode(cleaned[index:])
+                    return json.dumps(obj, ensure_ascii=False)
+                except json.JSONDecodeError:
+                    continue
+
+        return cleaned.strip()

@@ -8,6 +8,15 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from contextlib import asynccontextmanager
 import os
+import sys
+
+# 中文 Windows 默认控制台为 GBK，强制 UTF-8 输出，避免 emoji/特殊字符导致启动失败
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 from config import settings
 from core.database import engine
@@ -18,6 +27,9 @@ from core.exceptions import (
     sqlalchemy_exception_handler,
     general_exception_handler
 )
+
+# 导入所有模型（确保 SQLAlchemy 识别表关系）
+import models
 
 # 导入路由
 from api import meetings
@@ -30,7 +42,7 @@ os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时执行
-    print("🚀 应用启动中...")
+    print("[启动] 应用启动中...")
 
     # 启动 APScheduler 调度器
     from core.scheduler import start_scheduler, shutdown_scheduler
@@ -39,7 +51,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # 关闭时执行
-    print("👋 应用关闭中...")
+    print("[关闭] 应用关闭中...")
     shutdown_scheduler()
     await engine.dispose()
 

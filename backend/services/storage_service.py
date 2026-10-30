@@ -75,7 +75,7 @@ class StorageService:
         url_lower = self.public_base_url.lower()
 
         # 检测本地回环地址
-        localhost_patterns = ["127.0.0.1", "localhost", "0.0.0.0", "::1"]
+        localhost_patterns = ["127.0.0.1", "0.0.0.0", "::1"]
 
         for pattern in localhost_patterns:
             if pattern in url_lower:

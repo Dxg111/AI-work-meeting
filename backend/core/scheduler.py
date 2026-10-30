@@ -46,16 +46,15 @@ async def poll_asr_tasks():
                     db
                 )
 
-                # 如果转写成功，自动触发 LLM 生成纪要
+                # 如果转写成功，继续生成纪要
+                # 注意：ASR 任务无论是自动处理还是手动触发，转写完成后都应继续走 LLM，
+                # 否则手动处理的会议会永久停在 transcribed 状态。
                 if asr_result and asr_result.status == "succeeded":
                     print(f"[Scheduler] 会议 {meeting.meeting_id} 转写成功，开始生成纪要...")
-
-                    # 如果开启了自动处理，继续生成纪要
-                    if meeting.auto_process:
-                        try:
-                            await llm_service.generate_minutes(meeting.meeting_id, db)
-                        except Exception as e:
-                            print(f"[Scheduler] 会议 {meeting.meeting_id} 生成纪要失败: {e}")
+                    try:
+                        await llm_service.generate_minutes(meeting.meeting_id, db)
+                    except Exception as e:
+                        print(f"[Scheduler] 会议 {meeting.meeting_id} 生成纪要失败: {e}")
 
         except Exception as e:
             print(f"[Scheduler] 轮询 ASR 任务失败: {e}")

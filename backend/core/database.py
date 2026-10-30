@@ -21,6 +21,9 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
 )
 
+# 导出为 async_session_maker（用于后台任务）
+async_session_maker = AsyncSessionLocal
+
 # 声明基类
 Base = declarative_base()
 

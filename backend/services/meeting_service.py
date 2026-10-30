@@ -3,9 +3,10 @@
 """
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, or_, and_
+from sqlalchemy import select, delete, or_, and_, func
 from fastapi import BackgroundTasks
 
+from config import settings
 from models.meeting import Meeting
 from models.transcript import Transcript
 from models.speaker import Speaker
@@ -14,6 +15,22 @@ from services.storage_service import storage_service
 from services.asr_service import asr_service
 from services.llm_service import llm_service
 from core.exceptions import BusinessException
+
+
+async def run_llm_generation(meeting_id: int) -> None:
+    """
+    后台任务：生成会议纪要
+
+    BackgroundTasks 在响应返回后执行，此时请求的 db 会话已关闭，
+    因此这里必须使用独立的数据库会话。
+    """
+    from core.database import async_session_maker
+
+    async with async_session_maker() as db:
+        try:
+            await llm_service.generate_minutes(meeting_id, db)
+        except Exception as e:
+            print(f"[Pipeline] 会议 {meeting_id} 生成纪要失败: {e}")
 
 
 class MeetingService:
@@ -84,17 +101,37 @@ class MeetingService:
         if not meeting:
             raise BusinessException("会议不存在")
 
-        # 检查状态（只有 uploaded 或 failed 可以触发）
+        # 检查状态（只有 uploaded / failed / transcribed 可以触发）
         if meeting.status not in ["uploaded", "failed", "transcribed"]:
             raise BusinessException(f"会议状态为 {meeting.status}，无法触发处理")
 
-        # 检查公网URL
-        is_valid, msg = storage_service.check_public_url_accessibility()
-        if not is_valid:
-            meeting.status = "failed"
-            meeting.error_msg = msg
+        # 已有转写结果时直接生成纪要：
+        # - status=transcribed：ASR 已完成，继续 LLM
+        # - status=failed 且存在转写数据：上一次在 LLM 阶段失败，重跑 LLM 而不是重新转写
+        transcript_count = await db.scalar(
+            select(func.count(Transcript.transcript_id)).where(
+                Transcript.meeting_id == meeting_id
+            )
+        )
+        has_transcript = bool(transcript_count)
+
+        if meeting.status == "transcribed" or (meeting.status == "failed" and has_transcript):
+            meeting.status = "summarizing"
+            meeting.error_msg = None
             await db.commit()
-            raise BusinessException(msg)
+
+            background_tasks.add_task(run_llm_generation, meeting_id)
+            print(f"[Pipeline] 会议 {meeting_id} 已有转写结果，直接生成纪要")
+            return
+
+        # 需要先转写：仅在真实 ASR 模式下校验公网地址（Mock 不需要下载音频）
+        if settings.ASR_PROVIDER != "mock":
+            is_valid, msg = storage_service.check_public_url_accessibility()
+            if not is_valid:
+                meeting.status = "failed"
+                meeting.error_msg = msg
+                await db.commit()
+                raise BusinessException(msg)
 
         # 提交 ASR 任务
         try:

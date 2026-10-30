@@ -63,6 +63,11 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# 本地测试文件（大文件 / 临时脚本）
+test_funasr_api.py
+test_meeting.mp3
+会议测试mp3文件/
+
 # 操作系统
 .DS_Store
 Thumbs.db

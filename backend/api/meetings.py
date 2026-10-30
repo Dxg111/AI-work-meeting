@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, BackgroundTasks,
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_, func
 
+from config import settings
 from core.database import get_db
 from core.response import success, error
 from core.exceptions import BusinessException
@@ -93,11 +94,12 @@ async def _trigger_pipeline_background(meeting_id: int):
 
     async with async_session_maker() as db:
         try:
-            # 检查公网URL
-            is_valid, msg = storage_service.check_public_url_accessibility()
-            if not is_valid:
-                await meeting_service.mark_failed(meeting_id, msg, db)
-                return
+            # 检查公网URL（仅真实 ASR 需要；Mock 模式不下载音频）
+            if settings.ASR_PROVIDER != "mock":
+                is_valid, msg = storage_service.check_public_url_accessibility()
+                if not is_valid:
+                    await meeting_service.mark_failed(meeting_id, msg, db)
+                    return
 
             # 提交 ASR 任务
             from services.asr_service import asr_service
