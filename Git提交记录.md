@@ -157,15 +157,43 @@
 - `/api/stats`：超级管理员全局统计、普通用户个人统计
 - KPI 卡片、状态分布饼图、近 7 天柱状图、分部门柱状图
 - 转写完成自动写入会议时长
-- 会议详情使用 html2pdf.js 导出 PDF（懒加载）
+- 会议详情使用 html2pdf.js 导出 PDF（懒加载；后续因空白问题改为 html2canvas + jsPDF）
 - 登录后默认进入统计首页
 - 新增《阶段4开发完成说明.md》
 
 ---
 
+## 第八次提交 - 遗留修复与长音频 Map-Reduce
+
+**提交哈希**: f2c46e7  
+**分支**: feature/leftover-fixes  
+**提交时间**: 2026-10-30  
+**提交信息**: fix: 修复遗留问题并完成长音频Map-Reduce
+
+### 包含内容
+
+- 发言人重命名后同步刷新 Markdown
+- ASR 任务超时、summarizing 卡住恢复
+- localhost/私网地址检测
+- 首次登录强制修改密码
+- 超管会议列表按创建人筛选
+- 前端时间格式统一
+- requirements 对齐 backend/venv
+- 上传文件分块写入
+- 历史会议 duration 回填
+- 长音频四步 Map-Reduce
+- PDF 导出空白修复（html2canvas + jsPDF 直接截图 + 全白检测）
+- vue-router `next()` 弃用警告修复
+- 新增《阶段5长音频处理说明.md》
+
+---
+
 ## 下一步
 
-阶段5：生产部署与长音频调优（Nginx、HTTPS、systemd、Map-Reduce），详见《方案设计文档_最终版.md》第 4 章。
+- 阶段5 剩余生产部署（Nginx、HTTPS、systemd）未做；
+- 真实 ASR 公网地址测试未做；
+- 历史测试数据清理待确认；
+- 建议在浏览器中复测统计图表与 PDF 导出。
 
 
 如需推送到远程仓库，请提供仓库地址。
